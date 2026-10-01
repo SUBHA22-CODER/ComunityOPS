@@ -1,0 +1,493 @@
+// Prisma Schema for CommunityOps
+// Implements all 25 core tables and the 5 technical pillars
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  avatarUrl       String?
+  systemRole      String           @default("PARTICIPANT") // ADMIN, PROGRAM_MANAGER, JUDGE, MENTOR, PARTICIPANT
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  programMembers  ProgramMember[]
+  participants    Participant[]
+  mentors         Mentor[]
+  judgeAssignments JudgeAssignment[]
+  scores          Score[]
+  conflicts       ConflictOfInterest[]
+  requestedApprovals Approval[]    @relation("RequestedBy")
+  approvedApprovals  Approval[]    @relation("ApprovedBy")
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions String   // JSON string array of permissions
+  createdAt   DateTime @default(now())
+
+  @@map("roles")
+}
+
+model Program {
+  id             String           @id @default(cuid())
+  name           String
+  slug           String           @unique
+  description    String?
+  status         String           @default("ACTIVE") // DRAFT, ACTIVE, JUDGING, COMPLETED, ARCHIVED
+  startDate      DateTime?
+  endDate        DateTime?
+  teamSizeMin    Int              @default(3)
+  teamSizeMax    Int              @default(5)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  members        ProgramMember[]
+  participants   Participant[]
+  applications   Application[]
+  teams          Team[]
+  mentors        Mentor[]
+  mentorAssignments MentorAssignment[]
+  submissions    Submission[]
+  rubrics        Rubric[]
+  judgeAssignments JudgeAssignment[]
+  conflicts      ConflictOfInterest[]
+  results        Result[]
+  commTemplates  CommTemplate[]
+  commCampaigns  CommCampaign[]
+  certificates   Certificate[]
+  approvals      Approval[]
+  auditLogs      AuditLog[]
+
+  @@map("programs")
+}
+
+model ProgramMember {
+  id        String   @id @default(cuid())
+  programId String
+  userId    String
+  role      String   // PROGRAM_MANAGER, ADMIN, JUDGE, MENTOR
+  createdAt DateTime @default(now())
+
+  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, userId])
+  @@map("program_members")
+}
+
+model Participant {
+  id           String              @id @default(cuid())
+  programId    String
+  userId       String?
+  name         String
+  email        String
+  skills       String              // Comma-separated or JSON list
+  rolePref     String              @default("Full Stack")
+  timezone     Int                 @default(0) // UTC offset in hours (-12 to +14)
+  bio          String?
+  conflictIds  String?             // Comma-separated participant IDs with conflicts
+  status       String              @default("ACTIVE") // PENDING, ACTIVE, DROPPED
+  createdAt    DateTime            @default(now())
+
+  program      Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  applications Application[]
+  teamMembers  TeamMember[]
+  conflicts    ConflictOfInterest[]
+
+  @@unique([programId, email])
+  @@map("participants")
+}
+
+model Application {
+  id            String              @id @default(cuid())
+  programId     String
+  participantId String
+  status        String              @default("SUBMITTED") // SUBMITTED, UNDER_REVIEW, ACCEPTED, REJECTED, WAITLIST
+  reviewerNotes String?
+  submittedAt   DateTime            @default(now())
+  reviewedAt    DateTime?
+
+  program       Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
+  participant   Participant         @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  answers       ApplicationAnswer[]
+
+  @@map("applications")
+}
+
+model ApplicationAnswer {
+  id            String      @id @default(cuid())
+  applicationId String
+  questionKey   String
+  answerValue   String
+  createdAt     DateTime    @default(now())
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("application_answers")
+}
+
+model Team {
+  id                String             @id @default(cuid())
+  programId         String
+  name              String
+  status            String             @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  techStack         String?            // Comma-separated tags
+  timezoneAvg       Float              @default(0)
+  optimizerNotes    String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  program           Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
+  members           TeamMember[]
+  submissions       Submission[]
+  mentorAssignments MentorAssignment[]
+  conflicts         ConflictOfInterest[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id            String      @id @default(cuid())
+  teamId        String
+  participantId String
+  role          String      @default("Member") // Lead, Frontend, Backend, ML, Designer
+  isLead        Boolean     @default(false)
+  joinedAt      DateTime    @default(now())
+
+  team          Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, participantId])
+  @@map("team_members")
+}
+
+model Mentor {
+  id          String             @id @default(cuid())
+  programId   String
+  userId      String?
+  name        String
+  email       String
+  expertise   String             // Comma-separated tech/industry expertise
+  capacity    Int                @default(2)
+  timezone    Int                @default(0)
+  createdAt   DateTime           @default(now())
+
+  program     Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignments MentorAssignment[]
+
+  @@map("mentors")
+}
+
+model MentorAssignment {
+  id             String   @id @default(cuid())
+  programId      String
+  teamId         String
+  mentorId       String
+  matchScore     Float    @default(0.0) // 0 - 100%
+  explainability String?  // e.g. "Matched because 92% skill overlap and same timezone"
+  status         String   @default("PROPOSED") // PROPOSED, CONFIRMED
+  createdAt      DateTime @default(now())
+
+  program        Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  mentor         Mentor   @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, mentorId])
+  @@map("mentor_assignments")
+}
+
+model Submission {
+  id               String            @id @default(cuid())
+  programId        String
+  teamId           String
+  title            String
+  description      String
+  repoUrl          String?
+  demoUrl          String?
+  videoUrl         String?
+  isLocked         Boolean           @default(false)
+  submittedAt      DateTime          @default(now())
+
+  program          Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  team             Team              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  judgeAssignments JudgeAssignment[]
+  scores           Score[]
+  normalizedScores NormalizedScore[]
+  results          Result[]
+
+  @@map("submissions")
+}
+
+model Rubric {
+  id          String      @id @default(cuid())
+  programId   String
+  name        String
+  version     Int         @default(1)
+  isDefault   Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  program     Program     @relation(fields: [programId], references: [id], onDelete: Cascade)
+  criteria    Criterion[]
+
+  @@map("rubrics")
+}
+
+model Criterion {
+  id               String            @id @default(cuid())
+  rubricId         String
+  name             String
+  description      String?
+  weight           Float             @default(1.0)
+  maxScore         Float             @default(10.0)
+
+  rubric           Rubric            @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  scores           Score[]
+  normalizedScores NormalizedScore[]
+
+  @@map("criteria")
+}
+
+model JudgeAssignment {
+  id           String     @id @default(cuid())
+  programId    String
+  judgeId      String
+  submissionId String
+  status       String     @default("ASSIGNED") // ASSIGNED, COMPLETED, COI_SKIPPED
+  assignedAt   DateTime   @default(now())
+
+  program      Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  judge        User       @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([judgeId, submissionId])
+  @@map("judge_assignments")
+}
+
+model Score {
+  id           String     @id @default(cuid())
+  judgeId      String
+  submissionId String
+  criterionId  String
+  rawScore     Float
+  comment      String?
+  createdAt    DateTime   @default(now())
+
+  judge        User       @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterion    Criterion  @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([judgeId, submissionId, criterionId])
+  @@map("scores")
+}
+
+model ConflictOfInterest {
+  id            String       @id @default(cuid())
+  programId     String
+  judgeId       String
+  participantId String?
+  teamId        String?
+  reason        String       // e.g. "Same Organization", "Prior Mentorship", "Teammate"
+  status        String       @default("ACTIVE") // ACTIVE, OVERRIDDEN
+  createdAt     DateTime     @default(now())
+
+  program       Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  judge         User         @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team          Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("conflicts_of_interest")
+}
+
+model NormalizedScore {
+  id            String     @id @default(cuid())
+  submissionId  String
+  judgeId       String
+  criterionId   String
+  rawScore      Float
+  zScore        Float
+  weightedScore Float
+  createdAt     DateTime   @default(now())
+
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  criterion     Criterion  @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, judgeId, criterionId])
+  @@map("normalized_scores")
+}
+
+model Result {
+  id              String     @id @default(cuid())
+  programId       String
+  submissionId    String     @unique
+  rawTotal        Float
+  normalizedTotal Float
+  rank            Int
+  isPublished     Boolean    @default(false)
+  publishedAt     DateTime?
+
+  program         Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  submission      Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("results")
+}
+
+model CommTemplate {
+  id          String   @id @default(cuid())
+  programId   String
+  name        String
+  channel     String   // EMAIL, DISCORD
+  subject     String?
+  content     String
+  createdAt   DateTime @default(now())
+
+  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@map("comm_templates")
+}
+
+model CommCampaign {
+  id             String            @id @default(cuid())
+  programId      String
+  name           String
+  channel        String            // EMAIL, DISCORD
+  subject        String?
+  body           String
+  status         String            @default("DRAFT") // DRAFT, PENDING_APPROVAL, QUEUED, IN_PROGRESS, COMPLETED, CANCELLED
+  totalRecipients Int              @default(0)
+  sentCount      Int               @default(0)
+  failedCount    Int               @default(0)
+  idempotencyKey String            @unique
+  createdAt      DateTime          @default(now())
+
+  program        Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  deliveries     MessageDelivery[]
+
+  @@map("comm_campaigns")
+}
+
+model OutboxEvent {
+  id             String    @id @default(cuid())
+  aggregateType  String    // CAMPAIGN, CERTIFICATE, TEAM_PUBLISH, RESULTS_PUBLISH
+  aggregateId    String
+  eventType      String    // SEND_EMAIL, SEND_DISCORD, SIGN_CERTIFICATE
+  payload        String    // JSON stringified payload
+  idempotencyKey String    @unique
+  status         String    @default("queued") // queued, processing, sent, failed, dead
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  availableAt    DateTime  @default(now())
+  processedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+
+  deliveries     MessageDelivery[]
+
+  @@map("outbox_events")
+}
+
+model MessageDelivery {
+  id                String       @id @default(cuid())
+  campaignId        String?
+  outboxEventId     String?
+  recipientAddress  String
+  channel           String       // EMAIL, DISCORD
+  status            String       @default("QUEUED") // QUEUED, SENT, FAILED
+  providerMessageId String?
+  error             String?
+  deliveredAt       DateTime?
+  createdAt         DateTime     @default(now())
+
+  campaign          CommCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  outboxEvent       OutboxEvent?  @relation(fields: [outboxEventId], references: [id], onDelete: SetNull)
+
+  @@map("message_deliveries")
+}
+
+model Certificate {
+  id                 String                  @id @default(cuid())
+  programId          String
+  certId             String                  @unique // UUIDv7 or base58 check code
+  recipientName      String
+  recipientEmailHash String
+  role               String                  // winner, participant, mentor, judge
+  issuedAt           DateTime                @default(now())
+  signature          String                  // Ed25519 signature hex string
+  canonicalPayload   String                  // Exact canonical JSON string verified by public key
+  isRevoked          Boolean                 @default(false)
+  createdAt          DateTime                @default(now())
+
+  program            Program                 @relation(fields: [programId], references: [id], onDelete: Cascade)
+  revocations        CertificateRevocation[]
+
+  @@map("certificates")
+}
+
+model CertificateRevocation {
+  id            String      @id @default(cuid())
+  certificateId String
+  reason        String
+  revokedBy     String
+  revokedAt     DateTime    @default(now())
+
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@map("certificate_revocations")
+}
+
+model Approval {
+  id             String    @id @default(cuid())
+  programId      String
+  actionType     String    // PUBLISH_TEAMS, PUBLISH_RESULTS, BULK_SEND, ISSUE_CERTIFICATES
+  targetType     String    // Team, Result, CommCampaign, Certificate
+  targetId       String
+  requestedBy    String
+  approvedBy     String?
+  status         String    @default("pending") // pending, approved, rejected, expired
+  diff           String    // JSON snapshot diff of what will change
+  idempotencyKey String    @unique
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  program        Program   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  requester      User      @relation("RequestedBy", fields: [requestedBy], references: [id])
+  approver       User?     @relation("ApprovedBy", fields: [approvedBy], references: [id])
+
+  @@map("approvals")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  programId      String?
+  actorId        String?
+  actorEmail     String?
+  action         String   // e.g. "TEAMS_PUBLISHED", "RESULTS_COMPUTED", "SCORE_SUBMITTED"
+  targetType     String   // e.g. "Team", "Submission", "Score"
+  targetId       String?
+  beforeSnapshot String?  // JSON string
+  afterSnapshot  String?  // JSON string
+  diff           String?  // JSON string summary of changes
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  program        Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  actor          User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
