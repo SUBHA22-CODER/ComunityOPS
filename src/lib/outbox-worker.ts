@@ -1,4 +1,5 @@
 import prisma from "./db";
+import { dispatchToN8n } from "./n8n";
 
 /**
  * Outbox Pattern Worker (Section 6.3)
@@ -8,13 +9,13 @@ import prisma from "./db";
  * 2. Token bucket rate limiting per provider/campaign
  * 3. Idempotent background worker processing
  * 4. Exponential backoff retry mechanism
- * 5. Channel adapters: Email and Discord
+ * 5. Channel adapters: Email, Discord, and n8n Workflow Dispatcher
  */
 
 export interface EnqueueOutboxParams {
-  aggregateType: "CAMPAIGN" | "CERTIFICATE" | "TEAM_PUBLISH" | "RESULTS_PUBLISH";
+  aggregateType: "CAMPAIGN" | "CERTIFICATE" | "TEAM_PUBLISH" | "RESULTS_PUBLISH" | "APPROVAL" | "APPLICATION";
   aggregateId: string;
-  eventType: "SEND_EMAIL" | "SEND_DISCORD" | "SIGN_CERTIFICATE";
+  eventType: "SEND_EMAIL" | "SEND_DISCORD" | "SIGN_CERTIFICATE" | "DISPATCH_N8N";
   payload: Record<string, any>;
   idempotencyKey: string;
 }
@@ -88,6 +89,16 @@ export async function processOutboxBatch(batchSize = 10): Promise<{
         await deliverEmail(payload);
       } else if (event.eventType === "SEND_DISCORD") {
         await deliverDiscord(payload);
+      } else if (event.eventType === "DISPATCH_N8N") {
+        const result = await dispatchToN8n(
+          payload.subEventType || event.aggregateType,
+          event.aggregateType,
+          event.aggregateId,
+          payload
+        );
+        if (!result.success) {
+          throw new Error(result.error || "Failed to dispatch to n8n");
+        }
       }
 
       // Mark sent successfully
@@ -176,6 +187,15 @@ async function deliverEmail(payload: {
     return;
   }
 
+  // If n8n webhook URL is configured, route via n8n communication workflow
+  if (process.env.N8N_WEBHOOK_URL) {
+    const res = await dispatchToN8n("EMAIL_NOTIFICATION", "CAMPAIGN", payload.campaignId || "direct", payload);
+    if (!res.success) {
+      throw new Error(`n8n Email Dispatch Error: ${res.error}`);
+    }
+    return;
+  }
+
   // Local / Simulation delivery
   // Simulated small network latency
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -199,6 +219,15 @@ async function deliverDiscord(payload: {
     });
     if (!res.ok) {
       throw new Error(`Discord Webhook Error: ${await res.text()}`);
+    }
+    return;
+  }
+
+  // If n8n webhook URL is configured, route via n8n communication workflow
+  if (process.env.N8N_WEBHOOK_URL) {
+    const res = await dispatchToN8n("DISCORD_NOTIFICATION", "COMMUNICATION", payload.channelId || "general", payload);
+    if (!res.success) {
+      throw new Error(`n8n Discord Dispatch Error: ${res.error}`);
     }
     return;
   }

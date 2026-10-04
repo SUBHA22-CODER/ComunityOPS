@@ -2,20 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   ShieldCheck,
   Users,
   Award,
   Send,
   Scale,
-  FileCheck,
-  CheckCircle2,
   Activity,
   Layers,
+  Sparkles,
+  Menu,
+  X,
+  ArrowUpRight,
 } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems = [
     { name: "Overview", href: "/", icon: Activity },
@@ -28,35 +33,24 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 glass border-b border-slate-800 px-6 py-3">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
+    <header className="sticky top-0 z-50 px-4 pt-3 pb-2 transition-all">
+      {/* Apple-style Frosted Glass Capsule */}
+      <div className="max-w-6xl mx-auto rounded-full apple-glass px-4 py-2 shadow-sm flex items-center justify-between transition-all duration-300">
         {/* Brand */}
-        <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-              <Scale className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="font-bold text-lg text-white tracking-tight flex items-center gap-2">
-                CommunityOps
-                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                  v1.0
-                </span>
-              </span>
-              <p className="text-[11px] text-slate-400 -mt-0.5">High-Stakes Operations Platform</p>
-            </div>
-          </Link>
-
-          {/* Active Cohort Switcher */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-slate-400">Active Cohort:</span>
-            <span className="text-slate-200 font-medium">Global AI Hackathon 2026</span>
+        <Link href="/" className="flex items-center gap-2.5 pl-2 group">
+          <div className="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+            <Scale className="h-4 w-4" />
           </div>
-        </div>
+          <span className="font-bold text-sm tracking-tight text-[#1d1d1f] dark:text-[#f5f5f7] flex items-center gap-1.5">
+            CommunityOps
+            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-500/30">
+              Pro
+            </span>
+          </span>
+        </Link>
 
-        {/* Links */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+        {/* Desktop Nav Items */}
+        <nav className="hidden lg:flex items-center gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -64,19 +58,75 @@ export default function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`relative px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${
                   isActive
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                    ? "text-blue-600 dark:text-white bg-blue-50/80 dark:bg-white/10 font-semibold shadow-xs"
+                    : "text-[#6e6e73] dark:text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className={`h-3.5 w-3.5 ${isActive ? "text-blue-600 dark:text-blue-400" : ""}`} />
                 <span>{item.name}</span>
               </Link>
             );
           })}
+        </nav>
+
+        {/* Right Controls: Theme Toggle + Quick Pipeline Button */}
+        <div className="hidden sm:flex items-center gap-2 pr-1">
+          <ThemeToggle />
+
+          <Link
+            href="/judging"
+            className="apple-btn-primary px-3.5 py-1.5 text-xs inline-flex items-center gap-1.5 shadow-sm"
+          >
+            <span>Run Pipeline</span>
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
+
+        {/* Mobile Hamburger Button */}
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="lg:hidden p-2 rounded-full text-[#6e6e73] dark:text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          aria-label="Toggle Navigation"
+        >
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </div>
-    </nav>
+
+      {/* Mobile Drawer Menu */}
+      {mobileOpen && (
+        <div className="lg:hidden mt-2 max-w-6xl mx-auto rounded-3xl apple-glass p-4 shadow-xl border border-black/10 dark:border-white/10 animate-in-fluid">
+          <div className="flex flex-col gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-medium transition-all ${
+                    isActive
+                      ? "bg-blue-50 dark:bg-white/10 text-blue-600 dark:text-white font-semibold"
+                      : "text-[#6e6e73] dark:text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span>{item.name}</span>
+                  </div>
+                  <ArrowUpRight className="h-3.5 w-3.5 opacity-40" />
+                </Link>
+              );
+            })}
+            <div className="pt-2 flex items-center justify-between border-t border-black/5 dark:border-white/10 mt-2 px-2">
+              <span className="text-xs text-[#6e6e73] dark:text-[#86868b]">Appearance</span>
+              <ThemeToggle />
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }

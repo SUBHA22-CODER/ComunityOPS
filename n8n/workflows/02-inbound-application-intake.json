@@ -1,0 +1,74 @@
+{
+  "name": "CommunityOps — Inbound Application Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "application-intake",
+        "options": {}
+      },
+      "id": "node-form-webhook",
+      "name": "External Form Webhook (Typeform/Tally)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "application-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\n\n// Normalize fields from various form providers\nconst name = body.name || body.fullName || (body.fields ? body.fields.find(f => f.label.includes('Name'))?.value : 'Applicant');\nconst email = body.email || (body.fields ? body.fields.find(f => f.label.includes('Email'))?.value : 'applicant@example.com');\nconst skills = body.skills || ['Python', 'TypeScript'];\nconst rolePref = body.rolePref || body.role || 'Full Stack';\nconst timezone = body.timezone !== undefined ? parseInt(body.timezone, 10) : 0;\n\nreturn {\n  action: 'ingest_application',\n  data: {\n    name,\n    email,\n    skills,\n    rolePref,\n    timezone,\n    source: 'n8n_form_intake',\n    autoAccept: false,\n    answers: body\n  }\n};"
+      },
+      "id": "node-normalize-fields",
+      "name": "Normalize Applicant Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-Webhook-Secret", "value": "community-ops-n8n-webhook-secret-2026" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "action", "value": "={{ $json.action }}" },
+            { "name": "data", "value": "={{ $json.data }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-post-communityops",
+      "name": "Post to CommunityOps API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "External Form Webhook (Typeform/Tally)": {
+      "main": [
+        [
+          { "node": "Normalize Applicant Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Normalize Applicant Data": {
+      "main": [
+        [
+          { "node": "Post to CommunityOps API", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "name": "CommunityOps — Multi-Channel Communication Dispatcher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "community-ops-events",
+        "options": {}
+      },
+      "id": "node-webhook-in",
+      "name": "CommunityOps Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "community-ops-events"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.eventType }}",
+                    "rightValue": "EMAIL_NOTIFICATION",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.eventType }}",
+                    "rightValue": "DISCORD_NOTIFICATION",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "id": "node-switch-channel",
+      "name": "Switch by Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "notifications@communityops.org",
+        "toEmail": "={{ $json.body.data.recipientEmail }}",
+        "subject": "={{ $json.body.data.subject }}",
+        "html": "={{ $json.body.data.body }}",
+        "options": {}
+      },
+      "id": "node-send-email",
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "content": "={{ $json.body.data.content }}",
+        "options": {}
+      },
+      "id": "node-send-discord",
+      "name": "Send Discord Notification",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [720, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true, eventId: $node['CommunityOps Webhook Trigger'].json.body.eventId, status: 'dispatched' }) }}",
+        "options": {}
+      },
+      "id": "node-respond",
+      "name": "Respond to CommunityOps",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "CommunityOps Webhook Trigger": {
+      "main": [
+        [
+          { "node": "Switch by Event Type", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Switch by Event Type": {
+      "main": [
+        [
+          { "node": "Send Email Notification", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Send Discord Notification", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Email Notification": {
+      "main": [
+        [
+          { "node": "Respond to CommunityOps", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Discord Notification": {
+      "main": [
+        [
+          { "node": "Respond to CommunityOps", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
